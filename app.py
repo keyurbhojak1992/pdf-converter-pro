@@ -12,10 +12,11 @@ import numpy as np
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 import atexit
+from threading import Thread
+from time import sleep
+import requests
 
-@app.route('/dashboard')
-def dashboard():
-    
+# Initialize Flask app
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = 'your-secret-key-123'  # Change this for production
 
@@ -34,7 +35,6 @@ app.config.update(
     MAX_CONTENT_LENGTH=16 * 1024 * 1024  # 16MB max upload
 )
 
-
 def clear_all_folders():
     """Clear all upload and output folders"""
     folders_to_clear = [
@@ -43,7 +43,8 @@ def clear_all_folders():
         app.config['UPLOAD_FOLDER_EXCEL'],
         app.config['OUTPUT_FOLDER_REPORTS'],
         app.config['UPLOAD_FOLDER_SALES_DATA'],
-        app.config['OUTPUT_FOLDER_SALES_REPORTS']
+        app.config['OUTPUT_FOLDER_SALES_REPORTS'],
+        app.config['UPLOAD_FOLDER_VBA']
     ]
 
     for folder in folders_to_clear:
@@ -60,7 +61,6 @@ def clear_all_folders():
         except FileNotFoundError:
             os.makedirs(folder, exist_ok=True)
 
-
 # Clear folders on application start
 clear_all_folders()
 
@@ -74,7 +74,9 @@ for folder in [
     app.config['UPLOAD_FOLDER_EXCEL'],
     app.config['OUTPUT_FOLDER_REPORTS'],
     app.config['UPLOAD_FOLDER_SALES_DATA'],
-    app.config['OUTPUT_FOLDER_SALES_REPORTS']
+    app.config['OUTPUT_FOLDER_SALES_REPORTS'],
+    app.config['UPLOAD_FOLDER_VBA'],
+    os.path.dirname(app.config['VBA_TEMPLATE_PATH'])
 ]:
     os.makedirs(folder, exist_ok=True)
 
@@ -84,17 +86,14 @@ def allowed_file(filename, file_type='pdf'):
         return ext in app.config['ALLOWED_EXTENSIONS_PDF']
     return ext in app.config['ALLOWED_EXTENSIONS_EXCEL']
 
-
 def trim_whitespace(image):
     bg = Image.new(image.mode, image.size, (255, 255, 255))
     diff = ImageChops.difference(image, bg)
     bbox = diff.getbbox()
     return image.crop(bbox) if bbox else image
 
-
 def has_png_files():
     return any(fname.endswith('.png') for fname in os.listdir(app.config['OUTPUT_FOLDER_PNG']))
-
 
 def generate_png_name(base_name, output_folder):
     """Generate unique PNG filename with incremental suffix if needed"""
@@ -105,13 +104,11 @@ def generate_png_name(base_name, output_folder):
         counter += 1
     return name
 
-
 def safe_divide(numerator, denominator):
     """Safe division that handles division by zero"""
     if denominator == 0:
         return float('inf') if numerator > 0 else float('-inf') if numerator < 0 else 0
     return numerator / denominator
-
 
 def format_change(current, previous, is_amount=False):
     try:
@@ -138,7 +135,6 @@ def format_change(current, previous, is_amount=False):
             return f"{cur_str} (↓ {abs(percent)}% from {prev_str})"
     except Exception:
         return f"{current} (Error calculating change)"
-
 
 def validate_excel_data(df):
     """Validate the Excel data structure and content"""
@@ -174,7 +170,6 @@ def validate_excel_data(df):
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
     return df
-
 
 def generate_excel_report(input_path):
     try:
@@ -233,7 +228,6 @@ def generate_excel_report(input_path):
     except Exception as e:
         raise Exception(f"Error generating report: {str(e)}")
 
-
 def generate_sales_performance_report(input_path):
     try:
         # Read Excel file
@@ -287,7 +281,7 @@ def generate_sales_performance_report(input_path):
         # Create output filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = os.path.join(app.config['OUTPUT_FOLDER_SALES_REPORTS'],
-                                   f"Sales_Performance_Reports_{timestamp}.xlsx")
+                                 f"Sales_Performance_Reports_{timestamp}.xlsx")
 
         # Create a DataFrame for Excel output
         output_data = []
@@ -320,29 +314,27 @@ def generate_sales_performance_report(input_path):
     except Exception as e:
         raise Exception(f"Error generating sales performance report: {str(e)}")
 
-
 @app.route('/')
 def index():
     return render_template('index.html')
-
 
 @app.route('/dashboard')
 def dashboard():
     # Check for PDF files
     pdf_files = []
-    pdf_folder = app.config['UPLOAD_FOLDER']
+    pdf_folder = app.config['UPLOAD_FOLDER_PDF']
     if os.path.exists(pdf_folder):
         pdf_files = [f for f in os.listdir(pdf_folder) if f.lower().endswith('.pdf')]
 
     # Check for Excel files
     excel_files = []
-    excel_folder = app.config['EXCEL_UPLOAD_FOLDER']
+    excel_folder = app.config['UPLOAD_FOLDER_EXCEL']
     if os.path.exists(excel_folder):
         excel_files = [f for f in os.listdir(excel_folder) if f.lower().endswith(('.xlsx', '.xls'))]
 
     # Check for report files
     report_files = []
-    report_folder = app.config['REPORT_FOLDER']
+    report_folder = app.config['OUTPUT_FOLDER_REPORTS']
     if os.path.exists(report_folder):
         report_files = [f for f in os.listdir(report_folder) if f.lower().endswith('.xlsx')]
 
@@ -354,19 +346,19 @@ def dashboard():
 
     # Check for sales data files
     sales_data_files = []
-    sales_data_folder = app.config['SALES_DATA_FOLDER']
+    sales_data_folder = app.config['UPLOAD_FOLDER_SALES_DATA']
     if os.path.exists(sales_data_folder):
         sales_data_files = [f for f in os.listdir(sales_data_folder) if f.lower().endswith(('.xlsx', '.xls'))]
 
     # Check for sales report files
     sales_report_files = []
-    sales_report_folder = app.config['SALES_REPORT_FOLDER']
+    sales_report_folder = app.config['OUTPUT_FOLDER_SALES_REPORTS']
     if os.path.exists(sales_report_folder):
         sales_report_files = [f for f in os.listdir(sales_report_folder) if f.lower().endswith('.xlsx')]
 
     # Check if any PNGs exist
     has_pngs = False
-    png_folder = app.config['PNG_OUTPUT_FOLDER']
+    png_folder = app.config['OUTPUT_FOLDER_PNG']
     if os.path.exists(png_folder):
         has_pngs = any(f.lower().endswith('.png') for f in os.listdir(png_folder))
 
@@ -413,7 +405,6 @@ def upload_pdf():
 
     return redirect(url_for('dashboard'))
 
-
 @app.route('/convert-pdf', methods=['POST'])
 def convert_pdf():
     # Clear output folder first
@@ -450,7 +441,6 @@ def convert_pdf():
 
     return redirect(url_for('dashboard'))
 
-
 @app.route('/download-pngs')
 def download_pngs():
     zip_filename = 'converted_images.zip'
@@ -460,7 +450,6 @@ def download_pngs():
     except Exception as e:
         flash(f'Error creating ZIP file: {e}', 'error')
         return redirect(url_for('dashboard'))
-
 
 @app.route('/upload-excel', methods=['POST'])
 def upload_excel():
@@ -491,7 +480,6 @@ def upload_excel():
 
     return redirect(url_for('dashboard'))
 
-
 @app.route('/generate-report', methods=['POST'])
 def generate_report():
     if not os.listdir(app.config['UPLOAD_FOLDER_EXCEL']):
@@ -511,7 +499,6 @@ def generate_report():
         flash(f'Error generating report: {str(e)}', 'error')
 
     return redirect(url_for('dashboard'))
-
 
 @app.route('/download-report')
 def download_report():
@@ -578,16 +565,10 @@ def download_sales_report():
 
     return send_file(session['latest_sales_report'], as_attachment=True)
 
-# Create folders if they don't exist
-os.makedirs(app.config['UPLOAD_FOLDER_VBA'], exist_ok=True)
-os.makedirs(os.path.dirname(app.config['VBA_TEMPLATE_PATH']), exist_ok=True)
-
-# Add new route for VBA template download
 @app.route('/download-vba-template')
 def download_vba_template():
     return send_file(app.config['VBA_TEMPLATE_PATH'], as_attachment=True)
 
-# Add new route for VBA PDF upload
 @app.route('/upload-vba-pdfs', methods=['POST'])
 def upload_vba_pdfs():
     if 'file' not in request.files:
@@ -621,11 +602,6 @@ def upload_vba_pdfs():
         flash('No valid PDF files uploaded', 'error')
 
     return redirect(url_for('dashboard'))
-  
-# ===== KEEP-ALIVE SETUP =====
-from threading import Thread
-from time import sleep
-import requests
 
 def ping_self():
     while True:
@@ -641,6 +617,6 @@ if not app.debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
     t = Thread(target=ping_self)
     t.daemon = True
     t.start()
-# ===== END KEEP-ALIVE =====
+
 if __name__ == '__main__':
     app.run(debug=True)
