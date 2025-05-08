@@ -550,4 +550,25 @@ def download_sales_report():
     return send_file(session['latest_sales_report'], as_attachment=True)
 
 if __name__ == '__main__':
+    
+# ===== KEEP-ALIVE SETUP =====
+from threading import Thread
+from time import sleep
+import requests
+
+def ping_self():
+    while True:
+        try:
+            # Ping your own Render URL every 5 minutes
+            requests.get("https://your-app-name.onrender.com")
+            sleep(300)  # 300 seconds = 5 minutes
+        except:
+            sleep(60)  # If error, wait 1 minute and retry
+
+# Start keep-alive thread when not in debug mode
+if not app.debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+    t = Thread(target=ping_self)
+    t.daemon = True
+    t.start()
+# ===== END KEEP-ALIVE =====
     app.run(debug=True)
