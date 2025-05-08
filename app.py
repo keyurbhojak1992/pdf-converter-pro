@@ -26,7 +26,9 @@ app.config.update(
     OUTPUT_FOLDER_SALES_REPORTS='static/outputs/sales_reports',
     ALLOWED_EXTENSIONS_PDF={'pdf'},
     ALLOWED_EXTENSIONS_EXCEL={'xlsx', 'xls'},
-    MAX_CONTENT_LENGTH=16 * 1024 * 1024  # 16MB max upload
+    MAX_CONTENT_LENGTH=16 * 1024 * 1024  # 16MB max upload,
+    UPLOAD_FOLDER_VBA='static/uploads/vba_pdfs',
+    VBA_TEMPLATE_PATH='static/templates/VBAPdfExportTemplate.xlsm'
 )
 
 
@@ -548,6 +550,50 @@ def download_sales_report():
         return redirect(url_for('dashboard'))
 
     return send_file(session['latest_sales_report'], as_attachment=True)
+
+# Create folders if they don't exist
+os.makedirs(app.config['UPLOAD_FOLDER_VBA'], exist_ok=True)
+os.makedirs(os.path.dirname(app.config['VBA_TEMPLATE_PATH']), exist_ok=True)
+
+# Add new route for VBA template download
+@app.route('/download-vba-template')
+def download_vba_template():
+    return send_file(app.config['VBA_TEMPLATE_PATH'], as_attachment=True)
+
+# Add new route for VBA PDF upload
+@app.route('/upload-vba-pdfs', methods=['POST'])
+def upload_vba_pdfs():
+    if 'file' not in request.files:
+        flash('No file part', 'error')
+        return redirect(url_for('dashboard'))
+
+    # Clear existing VBA PDFs
+    for filename in os.listdir(app.config['UPLOAD_FOLDER_VBA']):
+        file_path = os.path.join(app.config['UPLOAD_FOLDER_VBA'], filename)
+        try:
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+        except Exception as e:
+            flash(f'Error clearing VBA PDF folder: {e}', 'error')
+
+    files = request.files.getlist('file')
+    file_count = 0
+
+    for file in files:
+        if file.filename == '':
+            continue
+
+        if file and allowed_file(file.filename, 'pdf'):
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER_VBA'], filename))
+            file_count += 1
+
+    if file_count > 0:
+        flash(f'Successfully uploaded {file_count} VBA-generated PDF(s)', 'success')
+    else:
+        flash('No valid PDF files uploaded', 'error')
+
+    return redirect(url_for('dashboard'))
   
 # ===== KEEP-ALIVE SETUP =====
 from threading import Thread
