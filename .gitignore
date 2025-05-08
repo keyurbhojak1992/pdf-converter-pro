@@ -1,0 +1,6 @@
+".idea/" 
+"static/uploads/" 
+"static/outputs/" 
+"__pycache__/" 
+"*.pyc" 
+".env" 
