@@ -170,57 +170,67 @@
     </div>
 
     <!-- VBA PDF Export Section -->
-    <div class="col-lg-6 mt-4">
-        <div class="card shadow-sm">
-            <div class="card-header bg-info text-white">
-                <h4 class="mb-0"><i class="fas fa-file-excel me-2"></i>VBA PDF Export</h4>
+<div class="col-lg-6 mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+            <h4 class="mb-0"><i class="fas fa-file-excel me-2"></i>VBA PDF Export</h4>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <h5>Instructions:</h5>
+                <ol>
+                    <li>Upload your Excel data file below</li>
+                    <li>Our system will automatically run the VBA macro to generate PDFs</li>
+                    <li>Download the generated PDFs when complete</li>
+                </ol>
             </div>
-            <div class="card-body">
+            
+            <!-- Step 1: Upload Excel file with data -->
+            <form method="POST" action="{{ url_for('process_vba_excel') }}" enctype="multipart/form-data" class="mb-4">
                 <div class="mb-3">
-                    <h5>Instructions:</h5>
-                    <ol>
-                        <li>Download our Excel template with VBA macro</li>
-                        <li>Run the macro to generate PDFs from your data</li>
-                        <li>Upload the generated PDFs below</li>
-                    </ol>
-                    <a href="{{ url_for('download_vba_template') }}" class="btn btn-info mb-3">
-                        <i class="fas fa-download me-1"></i>Download Excel Template
+                    <label class="form-label">Upload Excel Data File</label>
+                    <input class="form-control" type="file" name="file" accept=".xlsx,.xlsm" required>
+                    <div class="form-text">Excel file containing data to be converted to PDFs</div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-upload me-1"></i>Process with VBA
+                </button>
+            </form>
+
+            <!-- Step 2: Show generated PDFs after processing -->
+            {% if vba_processing_complete %}
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i>VBA processing complete!
+            </div>
+            {% endif %}
+
+            {% if vba_generated_pdfs %}
+            <div class="mt-3">
+                <h5>Generated PDFs:</h5>
+                <div class="d-grid gap-2 mb-3">
+                    <a href="{{ url_for('download_vba_pdfs_zip') }}" class="btn btn-success">
+                        <i class="fas fa-file-archive me-1"></i>Download All PDFs as ZIP
                     </a>
                 </div>
-                
-                <form method="POST" action="{{ url_for('upload_vba_pdfs') }}" enctype="multipart/form-data">
-                    <div class="mb-3">
-                        <label class="form-label">Upload VBA-Generated PDFs</label>
-                        <input class="form-control" type="file" name="file" accept=".pdf" multiple required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-upload me-1"></i>Upload PDFs
-                    </button>
-                </form>
-                
-                {% if vba_pdfs %}
-                <div class="mt-3">
-                    <h5>Uploaded VBA PDFs:</h5>
-                    <ul class="list-group">
-                        {% for file in vba_pdfs %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span><i class="fas fa-file-pdf text-danger me-2"></i>{{ file }}</span>
-                            <div>
-                                <a href="{{ url_for('static', filename='uploads/vba_pdfs/' + file) }}" 
-                                   class="btn btn-sm btn-outline-primary" target="_blank">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-                                <a href="{{ url_for('static', filename='uploads/vba_pdfs/' + file) }}" 
-                                   class="btn btn-sm btn-outline-success ms-1" download>
-                                    <i class="fas fa-download"></i>
-                                </a>
-                            </div>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-                {% endif %}
+                <ul class="list-group">
+                    {% for file in vba_generated_pdfs %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-file-pdf text-danger me-2"></i>{{ file }}</span>
+                        <div>
+                            <a href="{{ url_for('static', filename='outputs/vba_pdfs/' + file) }}" 
+                               class="btn btn-sm btn-outline-primary" target="_blank">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            <a href="{{ url_for('static', filename='outputs/vba_pdfs/' + file) }}" 
+                               class="btn btn-sm btn-outline-success ms-1" download>
+                                <i class="fas fa-download"></i>
+                            </a>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
