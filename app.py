@@ -24,11 +24,11 @@ app.config.update(
     OUTPUT_FOLDER_REPORTS='static/outputs/reports',
     UPLOAD_FOLDER_SALES_DATA='static/uploads/sales_data',
     OUTPUT_FOLDER_SALES_REPORTS='static/outputs/sales_reports',
+    UPLOAD_FOLDER_VBA='static/uploads/vba_pdfs',
+    VBA_TEMPLATE_PATH='static/templates/VBAPdfExportTemplate.xlsm',
     ALLOWED_EXTENSIONS_PDF={'pdf'},
     ALLOWED_EXTENSIONS_EXCEL={'xlsx', 'xls'},
-    MAX_CONTENT_LENGTH=16 * 1024 * 1024  # 16MB max upload,
-    UPLOAD_FOLDER_VBA='static/uploads/vba_pdfs',
-    VBA_TEMPLATE_PATH='static/templates/VBAPdfExportTemplate.xlsm'
+    MAX_CONTENT_LENGTH=16 * 1024 * 1024  # 16MB max upload
 )
 
 
