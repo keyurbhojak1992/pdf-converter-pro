@@ -15,6 +15,7 @@ import atexit
 from threading import Thread
 from time import sleep
 import requests
+import pythoncom  # Needed for COM initialization
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', template_folder='templates')
@@ -29,9 +30,10 @@ app.config.update(
     UPLOAD_FOLDER_SALES_DATA='static/uploads/sales_data',
     OUTPUT_FOLDER_SALES_REPORTS='static/outputs/sales_reports',
     UPLOAD_FOLDER_VBA='static/uploads/vba_pdfs',
+    VBA_OUTPUT_FOLDER='static/outputs/vba_output',
     VBA_TEMPLATE_PATH='static/templates/VBAPdfExportTemplate.xlsm',
     ALLOWED_EXTENSIONS_PDF={'pdf'},
-    ALLOWED_EXTENSIONS_EXCEL={'xlsx', 'xls'},
+    ALLOWED_EXTENSIONS_EXCEL={'xlsx', 'xls', 'xlsm'},
     MAX_CONTENT_LENGTH=16 * 1024 * 1024  # 16MB max upload
 )
 
@@ -44,7 +46,8 @@ def clear_all_folders():
         app.config['OUTPUT_FOLDER_REPORTS'],
         app.config['UPLOAD_FOLDER_SALES_DATA'],
         app.config['OUTPUT_FOLDER_SALES_REPORTS'],
-        app.config['UPLOAD_FOLDER_VBA']
+        app.config['UPLOAD_FOLDER_VBA'],
+        app.config['VBA_OUTPUT_FOLDER']
     ]
 
     for folder in folders_to_clear:
@@ -61,6 +64,25 @@ def clear_all_folders():
         except FileNotFoundError:
             os.makedirs(folder, exist_ok=True)
 
+# Clear folders on application start
+clear_all_folders()
+
+# Register cleanup function to run when application exits
+atexit.register(clear_all_folders)
+
+# Create folders if they don't exist
+for folder in [
+    app.config['UPLOAD_FOLDER_PDF'],
+    app.config['OUTPUT_FOLDER_PNG'],
+    app.config['UPLOAD_FOLDER_EXCEL'],
+    app.config['OUTPUT_FOLDER_REPORTS'],
+    app.config['UPLOAD_FOLDER_SALES_DATA'],
+    app.config['OUTPUT_FOLDER_SALES_REPORTS'],
+    app.config['UPLOAD_FOLDER_VBA'],
+    app.config['VBA_OUTPUT_FOLDER'],
+    os.path.dirname(app.config['VBA_TEMPLATE_PATH'])
+]:
+    os.makedirs(folder, exist_ok=True)
 # Clear folders on application start
 clear_all_folders()
 
@@ -565,43 +587,101 @@ def download_sales_report():
 
     return send_file(session['latest_sales_report'], as_attachment=True)
 
-@app.route('/download-vba-template')
-def download_vba_template():
-    return send_file(app.config['VBA_TEMPLATE_PATH'], as_attachment=True)
-
-@app.route('/upload-vba-pdfs', methods=['POST'])
-def upload_vba_pdfs():
+@app.route('/process-vba-excel', methods=['POST'])
+def process_vba_excel():
     if 'file' not in request.files:
-        flash('No file part', 'error')
+        flash('No file uploaded', 'error')
         return redirect(url_for('dashboard'))
 
-    # Clear existing VBA PDFs
-    for filename in os.listdir(app.config['UPLOAD_FOLDER_VBA']):
-        file_path = os.path.join(app.config['UPLOAD_FOLDER_VBA'], filename)
+    file = request.files['file']
+    if file.filename == '':
+        flash('No selected file', 'error')
+        return redirect(url_for('dashboard'))
+
+    if file and allowed_file(file.filename, 'excel'):
         try:
-            if os.path.isfile(file_path):
-                os.unlink(file_path)
-        except Exception as e:
-            flash(f'Error clearing VBA PDF folder: {e}', 'error')
-
-    files = request.files.getlist('file')
-    file_count = 0
-
-    for file in files:
-        if file.filename == '':
-            continue
-
-        if file and allowed_file(file.filename, 'pdf'):
+            # Initialize COM
+            pythoncom.CoInitialize()
+            
+            # Save the uploaded file
             filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER_VBA'], filename))
-            file_count += 1
-
-    if file_count > 0:
-        flash(f'Successfully uploaded {file_count} VBA-generated PDF(s)', 'success')
+            input_path = os.path.join(app.config['UPLOAD_FOLDER_VBA'], filename)
+            file.save(input_path)
+            
+            try:
+                from win32com.client import Dispatch
+                excel = Dispatch("Excel.Application")
+                excel.Visible = False  # Run in background
+                excel.DisplayAlerts = False  # Disable alerts
+                
+                # Open the workbook
+                workbook = excel.Workbooks.Open(input_path)
+                
+                try:
+                    # Run the macro - adjust to your macro name
+                    excel.Application.Run("Module1.ExportToPDF")
+                    
+                    # Wait for macro to complete
+                    while excel.Application.Ready == False:
+                        sleep(1)
+                    
+                    # Move generated PDFs to our output folder
+                    generated_pdfs = []
+                    temp_output = os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'temp')
+                    os.makedirs(temp_output, exist_ok=True)
+                    
+                    # Check for PDFs in the same directory as the Excel file
+                    source_dir = os.path.dirname(input_path)
+                    for item in os.listdir(source_dir):
+                        if item.lower().endswith('.pdf'):
+                            src = os.path.join(source_dir, item)
+                            dest = os.path.join(temp_output, item)
+                            shutil.move(src, dest)
+                            generated_pdfs.append(item)
+                    
+                    if not generated_pdfs:
+                        flash('No PDFs were generated by the VBA macro', 'warning')
+                    else:
+                        session['vba_generated_pdfs'] = generated_pdfs
+                        flash(f'Successfully generated {len(generated_pdfs)} PDF file(s)', 'success')
+                    
+                except Exception as e:
+                    flash(f'Error running VBA macro: {str(e)}', 'error')
+                finally:
+                    workbook.Close(False)  # Close without saving
+                    excel.Quit()
+            
+            except Exception as e:
+                flash(f'Error initializing Excel: {str(e)}', 'error')
+            finally:
+                pythoncom.CoUninitialize()
+            
+            # Clean up the uploaded Excel file
+            os.remove(input_path)
+            
+        except Exception as e:
+            flash(f'Error processing Excel file: {str(e)}', 'error')
     else:
-        flash('No valid PDF files uploaded', 'error')
+        flash('Invalid file type. Only Excel files allowed', 'error')
 
     return redirect(url_for('dashboard'))
+
+@app.route('/download-vba-pdfs')
+def download_vba_pdfs():
+    if 'vba_generated_pdfs' not in session:
+        flash('No PDFs available for download', 'error')
+        return redirect(url_for('dashboard'))
+    
+    temp_output = os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'temp')
+    zip_filename = 'vba_generated_pdfs.zip'
+    zip_path = os.path.join(app.config['VBA_OUTPUT_FOLDER'], zip_filename)
+    
+    try:
+        shutil.make_archive(os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'vba_generated_pdfs'), 'zip', temp_output)
+        return send_file(zip_path, as_attachment=True)
+    except Exception as e:
+        flash(f'Error creating ZIP file: {e}', 'error')
+        return redirect(url_for('dashboard'))
 
 def ping_self():
     while True:
