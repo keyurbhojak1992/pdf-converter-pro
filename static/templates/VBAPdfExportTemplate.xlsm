@@ -1,1 +1,80 @@
+Sub ExportVisibleRangesFitToOnePage_Final()
+    Dim ranges As Variant
+    Dim r As Variant
+    Dim ws As Worksheet
+    Dim fileName As String
+    Dim startCell As Range
+    Dim rng As Range
+    Dim exportPath As String
+    Dim fso As Object
+    Dim fileNames As Collection
+    
+    Set ws = ThisWorkbook.Sheets("Screen Shot")
+    Set fileNames = New Collection
+    
+    ' Define your ranges as before
+    ranges = Array("A1:BM2", "A10:BM11", "A13:BM14", "A16:BM17", "A19:BM20", _
+                   "A22:BM23", "A25:BM26", "A28:BM29", "A31:BM32", "A34:BM35", _
+                   "A37:BM38", "A4:BM5", "A40:BM41", "A43:BM44", "A46:BM47", _
+                   "A49:BM50", "A52:BM53", "A55:BM56", "A7:BM8")
 
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    ' Set export path to user's Downloads folder
+    exportPath = Environ("USERPROFILE") & "\Downloads\PDF_Export"
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(exportPath) Then
+        fso.CreateFolder exportPath
+    End If
+
+    ' Export each range as PDF
+    For Each r In ranges
+        Set startCell = ws.Range(Split(r, ":")(0))
+        fileName = startCell.Offset(1, 0).Value
+        Set rng = ws.Range(r)
+
+        If fileName <> "" Then
+            With ws.PageSetup
+                .PrintArea = r
+                .Orientation = IIf(rng.Columns.Count > rng.Rows.Count, xlLandscape, xlPortrait)
+                .Zoom = False
+                .FitToPagesWide = 1
+                .FitToPagesTall = 1
+                .CenterHorizontally = True
+                .CenterVertically = True
+            End With
+
+            Dim filePath As String
+            filePath = exportPath & "\" & fileName & ".pdf"
+            ws.ExportAsFixedFormat _
+                Type:=xlTypePDF, _
+                fileName:=filePath, _
+                Quality:=xlQualityStandard, _
+                IncludeDocProperties:=True, _
+                IgnorePrintAreas:=False, _
+                OpenAfterPublish:=False
+                
+            fileNames.Add filePath
+        End If
+    Next r
+
+    ' Reset print settings
+    With ws.PageSetup
+        .PrintArea = ""
+        .FitToPagesWide = False
+        .FitToPagesTall = False
+        .Zoom = True
+    End With
+
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+
+    ' Show completion message
+    If fileNames.Count > 0 Then
+        MsgBox "Successfully exported " & fileNames.Count & " PDF files to:" & vbCrLf & exportPath, _
+               vbInformation, "PDF Export Complete"
+    Else
+        MsgBox "No PDF files were exported. Please check your data.", vbExclamation, "No Files Exported"
+    End If
+End Sub
