@@ -13,6 +13,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 import atexit
 
+@app.route('/dashboard')
+def dashboard():
+    
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = 'your-secret-key-123'  # Change this for production
 
@@ -325,32 +328,56 @@ def index():
 
 @app.route('/dashboard')
 def dashboard():
-    # Ensure folders are empty on new session
-    if 'session_started' not in session:
-        clear_all_folders()
-        session['session_started'] = True
+    # Check for PDF files
+    pdf_files = []
+    pdf_folder = app.config['UPLOAD_FOLDER']
+    if os.path.exists(pdf_folder):
+        pdf_files = [f for f in os.listdir(pdf_folder) if f.lower().endswith('.pdf')]
 
-    pdf_files = [f for f in os.listdir(app.config['UPLOAD_FOLDER_PDF']) if f.endswith('.pdf')]
-    excel_files = [f for f in os.listdir(app.config['UPLOAD_FOLDER_EXCEL']) if f.endswith(('.xlsx', '.xls'))]
-    has_pngs = has_png_files()
-    report_files = [f for f in os.listdir(app.config['OUTPUT_FOLDER_REPORTS']) if f.endswith('.xlsx')]
-    sales_data_files = [f for f in os.listdir(app.config['UPLOAD_FOLDER_SALES_DATA']) if f.endswith(('.xlsx', '.xls'))]
-    sales_report_files = [f for f in os.listdir(app.config['OUTPUT_FOLDER_SALES_REPORTS']) if f.endswith('.xlsx')]
+    # Check for Excel files
+    excel_files = []
+    excel_folder = app.config['EXCEL_UPLOAD_FOLDER']
+    if os.path.exists(excel_folder):
+        excel_files = [f for f in os.listdir(excel_folder) if f.lower().endswith(('.xlsx', '.xls'))]
 
-    # Prepare PNG files list
-    png_files = []
-    if has_pngs:
-        png_files = [f for f in os.listdir(app.config['OUTPUT_FOLDER_PNG']) if f.endswith('.png')]
+    # Check for report files
+    report_files = []
+    report_folder = app.config['REPORT_FOLDER']
+    if os.path.exists(report_folder):
+        report_files = [f for f in os.listdir(report_folder) if f.lower().endswith('.xlsx')]
+
+    # Check for VBA PDFs
+    vba_pdfs = []
+    vba_folder = app.config['UPLOAD_FOLDER_VBA']
+    if os.path.exists(vba_folder):
+        vba_pdfs = [f for f in os.listdir(vba_folder) if f.lower().endswith('.pdf')]
+
+    # Check for sales data files
+    sales_data_files = []
+    sales_data_folder = app.config['SALES_DATA_FOLDER']
+    if os.path.exists(sales_data_folder):
+        sales_data_files = [f for f in os.listdir(sales_data_folder) if f.lower().endswith(('.xlsx', '.xls'))]
+
+    # Check for sales report files
+    sales_report_files = []
+    sales_report_folder = app.config['SALES_REPORT_FOLDER']
+    if os.path.exists(sales_report_folder):
+        sales_report_files = [f for f in os.listdir(sales_report_folder) if f.lower().endswith('.xlsx')]
+
+    # Check if any PNGs exist
+    has_pngs = False
+    png_folder = app.config['PNG_OUTPUT_FOLDER']
+    if os.path.exists(png_folder):
+        has_pngs = any(f.lower().endswith('.png') for f in os.listdir(png_folder))
 
     return render_template('dashboard.html',
-                           pdf_files=pdf_files,
-                           excel_files=excel_files,
-                           has_pngs=has_pngs,
-                           report_files=report_files,
-                           png_files=png_files,
-                           sales_data_files=sales_data_files,
-                           sales_report_files=sales_report_files)
-
+                         pdf_files=pdf_files,
+                         excel_files=excel_files,
+                         report_files=report_files,
+                         sales_data_files=sales_data_files,
+                         sales_report_files=sales_report_files,
+                         vba_pdfs=vba_pdfs,
+                         has_pngs=has_pngs)
 
 @app.route('/upload-pdf', methods=['POST'])
 def upload_pdf():
