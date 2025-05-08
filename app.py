@@ -548,9 +548,7 @@ def download_sales_report():
         return redirect(url_for('dashboard'))
 
     return send_file(session['latest_sales_report'], as_attachment=True)
-
-if __name__ == '__main__':
-    
+  
 # ===== KEEP-ALIVE SETUP =====
 from threading import Thread
 from time import sleep
@@ -571,5 +569,5 @@ if not app.debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
     t.daemon = True
     t.start()
 # ===== END KEEP-ALIVE =====
-    
+if __name__ == '__main__':
     app.run(debug=True)
