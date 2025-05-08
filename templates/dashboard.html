@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h2>
+    <div>
+        {% if has_pngs %}
+        <a href="{{ url_for('download_pngs') }}" class="btn btn-success">
+            <i class="fas fa-file-archive me-1"></i>Download All PNGs
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- PDF Conversion Section - Simplified -->
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-file-pdf me-2"></i>PDF to PNG Conversion</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('upload_pdf') }}" enctype="multipart/form-data" class="mb-4">
+                    <div class="mb-3">
+                        <label for="pdfFile" class="form-label">Upload PDF Files</label>
+                        <input class="form-control" type="file" id="pdfFile" name="file" accept=".pdf" multiple required>
+                        <div class="form-text">Select one or more PDF files to convert</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload me-1"></i>Upload PDFs
+                    </button>
+                </form>
+
+                {% if pdf_files %}
+                <form method="POST" action="{{ url_for('convert_pdf') }}">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-exchange-alt me-1"></i>Convert to PNG
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Bid Summary Report Section (renamed from Excel Report Generator) -->
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="fas fa-file-excel me-2"></i>Bid Summary Report Generator</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('upload_excel') }}" enctype="multipart/form-data" class="mb-4">
+                    <div class="mb-3">
+                        <label for="excelFile" class="form-label">Upload Bid Data File</label>
+                        <input class="form-control" type="file" id="excelFile" name="file" accept=".xlsx,.xls" required>
+                        <div class="form-text">Upload an Excel file with bid data to generate summary reports</div>
+                    </div>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-upload me-1"></i>Upload Bid Data
+                    </button>
+                </form>
+
+                {% if excel_files %}
+                <div class="mb-3">
+                    <h5>Uploaded Bid Data File</h5>
+                    <ul class="list-group">
+                        {% for file in excel_files %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-file-excel text-success me-2"></i>{{ file }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% if excel_files %}
+                <form method="POST" action="{{ url_for('generate_report') }}" class="mb-3">
+                    <button type="submit" class="btn btn-info">
+                        <i class="fas fa-chart-bar me-1"></i>Generate Bid Summary
+                    </button>
+                </form>
+                {% endif %}
+
+                {% if report_files %}
+                <div class="mb-3">
+                    <h5>Available Bid Summary Reports</h5>
+                    <ul class="list-group">
+                        {% for file in report_files %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-file-excel text-info me-2"></i>{{ file }}</span>
+                            <a href="{{ url_for('download_report') }}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-download"></i>
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Sales Performance Report Section -->
+    <div class="col-lg-6 mt-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-warning text-white">
+                <h4 class="mb-0"><i class="fas fa-chart-line me-2"></i>Sales Performance Reports</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('upload_sales_data') }}" enctype="multipart/form-data" class="mb-4">
+                    <div class="mb-3">
+                        <label for="salesDataFile" class="form-label">Upload Sales Data File</label>
+                        <input class="form-control" type="file" id="salesDataFile" name="file" accept=".xlsx,.xls" required>
+                        <div class="form-text">Upload sales data Excel file (must contain Sheet2 with metrics)</div>
+                    </div>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-upload me-1"></i>Upload Sales Data
+                    </button>
+                </form>
+
+                {% if sales_data_files %}
+                <div class="mb-3">
+                    <h5>Uploaded Sales Data File</h5>
+                    <ul class="list-group">
+                        {% for file in sales_data_files %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-file-excel text-warning me-2"></i>{{ file }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% if sales_data_files %}
+                <form method="POST" action="{{ url_for('generate_sales_report') }}" class="mb-3">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-chart-pie me-1"></i>Generate Performance Report
+                    </button>
+                </form>
+                {% endif %}
+
+                {% if sales_report_files %}
+                <div class="mb-3">
+                    <h5>Available Sales Reports</h5>
+                    <ul class="list-group">
+                        {% for file in sales_report_files %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-file-excel text-success me-2"></i>{{ file }}</span>
+                            <a href="{{ url_for('download_sales_report') }}" class="btn btn-sm btn-outline-success">
+                                <i class="fas fa-download"></i>
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
