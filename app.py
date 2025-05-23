@@ -11,6 +11,7 @@ import math
 import numpy as np
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
+from flask import send_from_directory
 import atexit
 from threading import Thread
 from time import sleep
@@ -366,6 +367,12 @@ def dashboard():
     vba_folder = app.config['UPLOAD_FOLDER_VBA']
     if os.path.exists(vba_folder):
         vba_pdfs = [f for f in os.listdir(vba_folder) if f.lower().endswith('.pdf')]
+        
+    # Check for VBA generated PDFs
+    vba_generated_pdfs = []
+    vba_output_folder = os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'temp')
+    if os.path.exists(vba_output_folder):
+        vba_generated_pdfs = [f for f in os.listdir(vba_output_folder) if f.lower().endswith('.pdf')]
 
     # Check for sales data files
     sales_data_files = []
@@ -392,6 +399,7 @@ def dashboard():
                          sales_data_files=sales_data_files,
                          sales_report_files=sales_report_files,
                          vba_pdfs=vba_pdfs,
+                         vba_generated_pdfs=vba_generated_pdfs,  # Add this line
                          has_pngs=has_pngs)
 
 @app.route('/upload-pdf', methods=['POST'])
@@ -588,6 +596,7 @@ def download_sales_report():
 
     return send_file(session['latest_sales_report'], as_attachment=True)
 
+# Update your process_vba_excel route
 @app.route('/process-vba-excel', methods=['POST'])
 def process_vba_excel():
     if 'file' not in request.files:
@@ -606,51 +615,47 @@ def process_vba_excel():
             input_path = os.path.join(app.config['UPLOAD_FOLDER_VBA'], filename)
             file.save(input_path)
             
-            # Create a temporary directory for output
+            # Create output directory
             temp_output = os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'temp')
             os.makedirs(temp_output, exist_ok=True)
             
-            # For cross-platform compatibility, we'll use a Python-based approach
-            # This assumes you've converted your VBA logic to Python
-            try:
-                # Process the Excel file using pandas/openpyxl
-                df = pd.read_excel(input_path)
-                
-                # Here you would add your PDF generation logic
-                # For example, creating a simple PDF report for each row
-                from reportlab.pdfgen import canvas
-                from reportlab.lib.pagesizes import letter
-                
-                generated_pdfs = []
-                for index, row in df.iterrows():
-                    pdf_name = f"report_{index}.pdf"
-                    pdf_path = os.path.join(temp_output, pdf_name)
-                    
-                    c = canvas.Canvas(pdf_path, pagesize=letter)
-                    c.drawString(100, 750, f"Report for {row.get('Name', 'Unknown')}")
-                    # Add more content based on your data
-                    c.save()
-                    
-                    generated_pdfs.append(pdf_name)
-                
-                if not generated_pdfs:
-                    flash('No PDFs were generated', 'warning')
-                else:
-                    session['vba_generated_pdfs'] = generated_pdfs
-                    flash(f'Successfully generated {len(generated_pdfs)} PDF file(s)', 'success')
-                    
-            except Exception as e:
-                flash(f'Error processing Excel file: {str(e)}', 'error')
+            # Clear any existing PDFs
+            for f in os.listdir(temp_output):
+                os.remove(os.path.join(temp_output, f))
             
-            # Clean up the uploaded Excel file
+            # Process the Excel file
+            df = pd.read_excel(input_path)
+            generated_pdfs = []
+            
+            # Generate PDFs - customize this part with your actual PDF generation logic
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.pagesizes import letter
+            
+            for index, row in df.iterrows():
+                pdf_name = f"report_{index}.pdf"
+                pdf_path = os.path.join(temp_output, pdf_name)
+                
+                c = canvas.Canvas(pdf_path, pagesize=letter)
+                c.drawString(100, 750, f"Report for row {index}")
+                # Add your actual content here based on row data
+                c.save()
+                generated_pdfs.append(pdf_name)
+            
+            if not generated_pdfs:
+                flash('No PDFs were generated', 'warning')
+            else:
+                flash(f'Successfully generated {len(generated_pdfs)} PDF file(s)', 'success')
+            
+            # Clean up
             os.remove(input_path)
+            return redirect(url_for('dashboard'))
             
         except Exception as e:
             flash(f'Error processing file: {str(e)}', 'error')
+            return redirect(url_for('dashboard'))
     else:
         flash('Invalid file type. Only Excel files allowed', 'error')
-
-    return redirect(url_for('dashboard'))
+        return redirect(url_for('dashboard'))
 
 @app.route('/download-vba-pdf/<filename>')
 def download_vba_pdf(filename):
