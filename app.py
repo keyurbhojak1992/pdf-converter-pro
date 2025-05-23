@@ -652,8 +652,20 @@ def process_vba_excel():
 
     return redirect(url_for('dashboard'))
 
-@app.route('/download-vba-pdfs')
-def download_vba_pdfs():
+@app.route('/download-vba-pdf/<filename>')
+def download_vba_pdf(filename):
+    try:
+        return send_from_directory(
+            os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'temp'),
+            filename,
+            as_attachment=True
+        )
+    except FileNotFoundError:
+        flash('Requested PDF file not found', 'error')
+        return redirect(url_for('dashboard'))
+
+@app.route('/download-all-vba-pdfs')
+def download_all_vba_pdfs():
     if 'vba_generated_pdfs' not in session:
         flash('No PDFs available for download', 'error')
         return redirect(url_for('dashboard'))
