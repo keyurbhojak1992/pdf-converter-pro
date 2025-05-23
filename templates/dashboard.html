@@ -169,7 +169,7 @@
         </div>
     </div>
 
-    <!-- VBA PDF Export Section -->
+        <!-- VBA PDF Export Section -->
 <div class="col-lg-6 mt-4">
     <div class="card shadow-sm">
         <div class="card-header bg-info text-white">
@@ -204,8 +204,10 @@
             </div>
             {% endif %}
 
-            <!-- In your VBA PDF Export section, modify the PDF display part: -->
-            {% if vba_generated_pdfs %}
+            <!-- PDF Download Section -->
+            {% set vba_output_exists = vba_generated_pdfs and vba_generated_pdfs|length > 0 %}
+            
+            {% if vba_output_exists %}
             <div class="mt-3">
                 <h5>Generated PDFs:</h5>
                 <div class="d-grid gap-2 mb-3">
