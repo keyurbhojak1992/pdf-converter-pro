@@ -173,40 +173,36 @@
 <div class="col-lg-6 mt-4">
     <div class="card shadow-sm">
         <div class="card-header bg-info text-white">
-            <h4 class="mb-0"><i class="fas fa-file-excel me-2"></i>VBA PDF Export</h4>
+            <h4 class="mb-0"><i class="fas fa-file-excel me-2"></i>Excel to PDF Export</h4>
         </div>
         <div class="card-body">
-            <div class="mb-3">
-                <h5>Instructions:</h5>
-                <ol>
-                    <li>Upload your Excel data file below</li>
-                    <li>Our system will automatically generate PDFs</li>
-                    <li>Download the ZIP file when complete</li>
-                </ol>
-            </div>
-            
-            <!-- Upload Form -->
             <form method="POST" action="{{ url_for('process_vba_excel') }}" enctype="multipart/form-data" class="mb-4">
                 <div class="mb-3">
-                    <label class="form-label">Upload Excel Data File</label>
+                    <label class="form-label">1. Select Excel File</label>
                     <input class="form-control" type="file" name="file" accept=".xlsx,.xlsm" required>
-                    <div class="form-text">Excel file containing data to be converted to PDFs</div>
                 </div>
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-upload me-1"></i>Process with VBA
+                
+                <div class="mb-3">
+                    <label class="form-label">2. Select Report Type</label>
+                    <select name="vba_type" class="form-select" required>
+                        <option value="sales">Sales Summary Report</option>
+                        <option value="bid">Bid Summary Report</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-file-pdf me-1"></i> Convert to PDF
                 </button>
             </form>
 
-            <!-- Download Button (only shown when processing complete) -->
             {% if 'vba_zip_file' in session %}
             <div class="alert alert-success">
-                <i class="fas fa-check-circle me-2"></i>Processing complete! Ready to download {{ session['vba_generated_count'] }} PDFs.
+                <i class="fas fa-check-circle me-2"></i> 
+                Conversion complete! {{ session['vba_generated_count'] }} PDFs generated.
             </div>
-            <div class="d-grid gap-2">
-                <a href="{{ url_for('download_all_vba_pdfs') }}" class="btn btn-success">
-                    <i class="fas fa-file-archive me-1"></i>Download All PDFs as ZIP
-                </a>
-            </div>
+            <a href="{{ url_for('download_all_vba_pdfs') }}" class="btn btn-success w-100">
+                <i class="fas fa-file-archive me-1"></i> Download All PDFs (ZIP)
+            </a>
             {% endif %}
         </div>
     </div>
