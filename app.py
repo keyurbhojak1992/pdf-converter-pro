@@ -18,6 +18,8 @@ from time import sleep
 import requests
 import subprocess
 import tempfile
+import pythoncom
+import win32com.client as win32  # Only for Option 1
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', template_folder='templates')
@@ -596,6 +598,35 @@ def download_sales_report():
 
     return send_file(session['latest_sales_report'], as_attachment=True)
 
+# Ensure folders exist new change from here
+os.makedirs(app.config['UPLOAD_FOLDER_VBA'], exist_ok=True)
+os.makedirs(app.config['VBA_OUTPUT_FOLDER'], exist_ok=True)
+
+def convert_with_libreoffice(input_path, output_folder):
+    """Cross-platform conversion using LibreOffice"""
+    try:
+        cmd = [
+            'libreoffice',
+            '--headless',
+            '--convert-to', 'pdf',
+            '--outdir', output_folder,
+            input_path
+        ]
+        result = subprocess.run(
+            cmd, 
+            check=True, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE,
+            timeout=60
+        )
+        return True
+    except subprocess.CalledProcessError as e:
+        app.logger.error(f"LibreOffice error: {e.stderr.decode()}")
+        return False
+    except Exception as e:
+        app.logger.error(f"Conversion error: {str(e)}")
+        return False
+
 @app.route('/process-vba-excel', methods=['POST'])
 def process_vba_excel():
     if 'file' not in request.files:
@@ -603,153 +634,61 @@ def process_vba_excel():
         return redirect(url_for('dashboard'))
 
     file = request.files['file']
+    vba_type = request.form.get('vba_type', 'sales')
+
     if file.filename == '':
         flash('No selected file', 'error')
         return redirect(url_for('dashboard'))
 
-    if file and allowed_file(file.filename, 'excel'):
-        try:
-            # Clear previous outputs
-            temp_output = os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'temp')
-            if os.path.exists(temp_output):
-                shutil.rmtree(temp_output)
-            os.makedirs(temp_output, exist_ok=True)
-
-            # Save the uploaded file
-            filename = secure_filename(file.filename)
-            input_path = os.path.join(app.config['UPLOAD_FOLDER_VBA'], filename)
-            file.save(input_path)
-            
-            # Process the Excel file
-            from openpyxl import load_workbook
-            from openpyxl.utils import range_boundaries
-            from reportlab.lib.pagesizes import letter, landscape
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.units import inch
-            from reportlab.platypus import Table, TableStyle
-            from reportlab.lib import colors
-
-            wb = load_workbook(input_path)
-            ws = wb.active
-
-            generated_pdfs = []
-            
-            # Determine which processing method to use based on sheet structure
-            if ws.title == "Screen Shot":  # Bid Summary format
-                ranges = [
-                    ("A1:BM2", "Summary_Header"),
-                    ("A10:BM11", ws['B10'].value),
-                    ("A13:BM14", ws['B13'].value),
-                    # Add all your ranges here as in your VBA macro
-                ]
-                
-                for rng, name in ranges:
-                    if not name:
-                        continue
-                        
-                    pdf_name = f"{name}.pdf"
-                    pdf_path = os.path.join(temp_output, pdf_name)
-                    
-                    # Get the actual cell values from the range
-                    min_col, min_row, max_col, max_row = range_boundaries(rng)
-                    data = []
-                    for row in ws.iter_rows(min_row=min_row, max_row=max_row,
-                                          min_col=min_col, max_col=max_col):
-                        data.append([cell.value for cell in row])
-                    
-                    # Create PDF with proper formatting
-                    c = canvas.Canvas(pdf_path, pagesize=landscape(letter) if max_col-min_col > 10 else letter)
-                    
-                    # Create a table with the data
-                    table = Table(data)
-                    
-                    # Style the table to match Excel appearance
-                    table.setStyle(TableStyle([
-                        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-                        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),  # Header row
-                        ('FONTSIZE', (0,0), (-1,0), 12),
-                        ('BOTTOMPADDING', (0,0), (-1,0), 12),
-                        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-                        ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-                    ]))
-                    
-                    # Draw the table on the PDF
-                    table.wrapOn(c, letter[0]-2*inch, letter[1]-2*inch)
-                    table.drawOn(c, inch, letter[1]-inch-table._height)
-                    
-                    c.save()
-                    generated_pdfs.append(pdf_name)
-            
-            else:  # Sales Person format
-                for col in range(3, 23):  # Columns C to V
-                    header = ws.cell(row=1, column=col).value
-                    if not header:
-                        continue
-                        
-                    pdf_name = f"{header}.pdf"
-                    pdf_path = os.path.join(temp_output, pdf_name)
-                    
-                    # Get all data from this column
-                    data = []
-                    for row in range(1, ws.max_row + 1):
-                        cell = ws.cell(row=row, column=col)
-                        if cell.value:
-                            data.append([cell.value])
-                    
-                    # Create PDF
-                    c = canvas.Canvas(pdf_path, pagesize=letter)
-                    
-                    # Add title
-                    c.setFont("Helvetica-Bold", 16)
-                    c.drawString(inch, letter[1]-inch, str(header))
-                    
-                    # Add data
-                    c.setFont("Helvetica", 12)
-                    y_position = letter[1] - 1.5*inch
-                    for value in data[1:]:  # Skip header
-                        c.drawString(inch, y_position, str(value[0]))
-                        y_position -= 0.25*inch
-                        if y_position < inch:
-                            c.showPage()
-                            y_position = letter[1] - inch
-                    
-                    c.save()
-                    generated_pdfs.append(pdf_name)
-            
-            # Create ZIP file immediately
-            zip_filename = 'generated_pdfs.zip'
-            zip_path = os.path.join(app.config['VBA_OUTPUT_FOLDER'], zip_filename)
-            
-            # Remove old zip if exists
-            if os.path.exists(zip_path):
-                os.remove(zip_path)
-            
-            # Create new zip
-            shutil.make_archive(
-                os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'generated_pdfs'), 
-                'zip', 
-                temp_output
-            )
-            
-            # Store only the zip info in session
-            session['vba_zip_file'] = zip_filename
-            session['vba_generated_count'] = len(generated_pdfs)
-            
-            # Clean up
-            wb.close()
-            os.remove(input_path)
-            shutil.rmtree(temp_output)
-            
-            flash(f'Successfully generated {len(generated_pdfs)} PDF file(s). Ready to download.', 'success')
-            
-        except Exception as e:
-            flash(f'Error processing file: {str(e)}', 'error')
-            app.logger.error(f"Error in process_vba_excel: {str(e)}")
-    else:
+    if not allowed_file(file.filename, 'excel'):
         flash('Invalid file type. Only Excel files allowed', 'error')
+        return redirect(url_for('dashboard'))
+
+    try:
+        # Setup directories
+        temp_output = os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'temp')
+        os.makedirs(temp_output, exist_ok=True)
+
+        # Save uploaded file
+        filename = secure_filename(file.filename)
+        input_path = os.path.join(app.config['UPLOAD_FOLDER_VBA'], filename)
+        file.save(input_path)
+
+        # Convert using LibreOffice (works on Render)
+        success = convert_with_libreoffice(input_path, temp_output)
+
+        if not success:
+            raise Exception("PDF conversion failed")
+
+        # Create ZIP file
+        zip_filename = 'generated_pdfs.zip'
+        zip_path = os.path.join(app.config['VBA_OUTPUT_FOLDER'], zip_filename)
+        
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        
+        shutil.make_archive(
+            os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'generated_pdfs'), 
+            'zip', 
+            temp_output
+        )
+
+        # Store result in session
+        pdf_files = [f for f in os.listdir(temp_output) if f.endswith('.pdf')]
+        session['vba_zip_file'] = zip_filename
+        session['vba_generated_count'] = len(pdf_files)
+
+        # Cleanup
+        shutil.rmtree(temp_output)
+        os.remove(input_path)
+
+        flash(f'Successfully generated {len(pdf_files)} PDF file(s). Ready to download.', 'success')
+        
+    except Exception as e:
+        flash(f'Error processing file: {str(e)}', 'error')
+        app.logger.error(f"Processing error: {str(e)}")
 
     return redirect(url_for('dashboard'))
-
 @app.route('/download-vba-pdf/<filename>')
 def download_vba_pdf(filename):
     try:
