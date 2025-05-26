@@ -596,7 +596,6 @@ def download_sales_report():
 
     return send_file(session['latest_sales_report'], as_attachment=True)
 
-# Update your process_vba_excel route
 @app.route('/process-vba-excel', methods=['POST'])
 def process_vba_excel():
     if 'file' not in request.files:
@@ -610,52 +609,136 @@ def process_vba_excel():
 
     if file and allowed_file(file.filename, 'excel'):
         try:
+            # Clear previous outputs
+            temp_output = os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'temp')
+            if os.path.exists(temp_output):
+                shutil.rmtree(temp_output)
+            os.makedirs(temp_output, exist_ok=True)
+
             # Save the uploaded file
             filename = secure_filename(file.filename)
             input_path = os.path.join(app.config['UPLOAD_FOLDER_VBA'], filename)
             file.save(input_path)
             
-            # Create output directory
-            temp_output = os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'temp')
-            os.makedirs(temp_output, exist_ok=True)
-            
-            # Clear any existing PDFs
-            for f in os.listdir(temp_output):
-                os.remove(os.path.join(temp_output, f))
-            
-            # Process the Excel file
-            df = pd.read_excel(input_path)
+            # Process the Excel file using openpyxl
+            from openpyxl import load_workbook
+            wb = load_workbook(input_path)
+            ws = wb.active  # Get the first worksheet
+
             generated_pdfs = []
             
-            # Generate PDFs - customize this part with your actual PDF generation logic
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.pagesizes import letter
-            
-            for index, row in df.iterrows():
-                pdf_name = f"report_{index}.pdf"
+            # Method 1: Export each column as separate PDF (like first VBA macro)
+            for col in range(3, 23):  # Columns C to V (3 to 22)
+                # Get column header for filename
+                cell_value = str(ws.cell(row=1, column=col).value).strip()
+                if not cell_value:
+                    cell_value = f"Col_{col}"
+                
+                # Create PDF
+                pdf_name = f"{cell_value}.pdf"
                 pdf_path = os.path.join(temp_output, pdf_name)
                 
+                # Create PDF using reportlab
+                from reportlab.pdfgen import canvas
+                from reportlab.lib.pagesizes import letter
+                
                 c = canvas.Canvas(pdf_path, pagesize=letter)
-                c.drawString(100, 750, f"Report for row {index}")
-                # Add your actual content here based on row data
+                y_position = 750  # Start near top of page
+                
+                # Add column header
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(100, y_position, cell_value)
+                y_position -= 30
+                
+                # Add data from column (first 20 rows)
+                c.setFont("Helvetica", 12)
+                for row in range(2, 22):
+                    cell_value = str(ws.cell(row=row, column=col).value)
+                    if cell_value:
+                        c.drawString(100, y_position, cell_value)
+                        y_position -= 20
+                        if y_position < 50:  # New page if running out of space
+                            c.showPage()
+                            y_position = 750
+                
                 c.save()
                 generated_pdfs.append(pdf_name)
+            
+            # Method 2: Export specific ranges (like second VBA macro)
+            if ws.title == "Screen Shot":  # Check if this is the bid summary sheet
+                ranges = [
+                    ("A1:BM2", "Summary_Header"),
+                    ("A10:BM11", ws['B10'].value),
+                    ("A13:BM14", ws['B13'].value),
+                    ("A16:BM17", ws['B16'].value),
+                    ("A19:BM20", ws['B19'].value),
+                    ("A22:BM23", ws['B22'].value),
+                    ("A25:BM26", ws['B25'].value),
+                    ("A28:BM29", ws['B28'].value),
+                    ("A31:BM32", ws['B31'].value),
+                    ("A34:BM35", ws['B34'].value),
+                    ("A37:BM38", ws['B37'].value),
+                    ("A4:BM5", "Summary_Footer"),
+                    ("A40:BM41", ws['B40'].value),
+                    ("A43:BM44", ws['B43'].value),
+                    ("A46:BM47", ws['B46'].value),
+                    ("A49:BM50", ws['B49'].value),
+                    ("A52:BM53", ws['B52'].value),
+                    ("A55:BM56", ws['B55'].value),
+                    ("A7:BM8", "Summary_Details")
+                ]
+                
+                for rng, name in ranges:
+                    if not name:
+                        continue
+                        
+                    pdf_name = f"{name}.pdf"
+                    pdf_path = os.path.join(temp_output, pdf_name)
+                    
+                    # Create PDF for this range
+                    c = canvas.Canvas(pdf_path, pagesize=letter)
+                    c.setFont("Helvetica-Bold", 16)
+                    c.drawString(100, 750, name)
+                    
+                    # Here you would add logic to format the range data properly
+                    # This is simplified - you might want to use a table or better layout
+                    c.setFont("Helvetica", 12)
+                    y_position = 700
+                    
+                    # Get the actual range data (simplified)
+                    start_col, start_row = rng.split(':')[0][0], int(rng.split(':')[0][1:])
+                    end_col, end_row = rng.split(':')[1][0], int(rng.split(':')[1][1:])
+                    
+                    for row in range(start_row, end_row + 1):
+                        for col in range(ord(start_col) - 64, ord(end_col) - 64 + 1):
+                            cell_value = str(ws.cell(row=row, column=col).value)
+                            if cell_value:
+                                c.drawString(100, y_position, cell_value)
+                                y_position -= 20
+                                if y_position < 50:
+                                    c.showPage()
+                                    y_position = 750
+                    
+                    c.save()
+                    generated_pdfs.append(pdf_name)
             
             if not generated_pdfs:
                 flash('No PDFs were generated', 'warning')
             else:
+                session['vba_generated_pdfs'] = [os.path.basename(p) for p in generated_pdfs]
                 flash(f'Successfully generated {len(generated_pdfs)} PDF file(s)', 'success')
             
             # Clean up
+            wb.close()
             os.remove(input_path)
-            return redirect(url_for('dashboard'))
             
         except Exception as e:
             flash(f'Error processing file: {str(e)}', 'error')
-            return redirect(url_for('dashboard'))
+            app.logger.error(f"Error in process_vba_excel: {str(e)}")
     else:
         flash('Invalid file type. Only Excel files allowed', 'error')
-        return redirect(url_for('dashboard'))
+
+    return redirect(url_for('dashboard'))
 
 @app.route('/download-vba-pdf/<filename>')
 def download_vba_pdf(filename):
