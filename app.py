@@ -20,6 +20,8 @@ import subprocess
 import tempfile
 import pythoncom
 import win32com.client as win32  # Only for Option 1
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', template_folder='templates')
@@ -598,30 +600,29 @@ def download_sales_report():
 
     return send_file(session['latest_sales_report'], as_attachment=True)
 
-# Ensure folders exist new change from here
+# Ensure folders exist from here
 os.makedirs(app.config['UPLOAD_FOLDER_VBA'], exist_ok=True)
 os.makedirs(app.config['VBA_OUTPUT_FOLDER'], exist_ok=True)
 
-def convert_with_libreoffice(input_path, output_folder):
-    """Cross-platform conversion using LibreOffice"""
+def convert_excel_to_pdf(input_path, output_folder):
+    """Convert Excel to PDF using unoconv"""
     try:
         cmd = [
-            'libreoffice',
-            '--headless',
-            '--convert-to', 'pdf',
-            '--outdir', output_folder,
+            'unoconv',
+            '-f', 'pdf',
+            '-o', output_folder,
             input_path
         ]
         result = subprocess.run(
-            cmd, 
-            check=True, 
-            stdout=subprocess.PIPE, 
+            cmd,
+            check=True,
+            stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=60
+            timeout=300  # 5 minute timeout
         )
         return True
     except subprocess.CalledProcessError as e:
-        app.logger.error(f"LibreOffice error: {e.stderr.decode()}")
+        app.logger.error(f"unoconv error: {e.stderr.decode()}")
         return False
     except Exception as e:
         app.logger.error(f"Conversion error: {str(e)}")
@@ -634,8 +635,6 @@ def process_vba_excel():
         return redirect(url_for('dashboard'))
 
     file = request.files['file']
-    vba_type = request.form.get('vba_type', 'sales')
-
     if file.filename == '':
         flash('No selected file', 'error')
         return redirect(url_for('dashboard'))
@@ -654,10 +653,8 @@ def process_vba_excel():
         input_path = os.path.join(app.config['UPLOAD_FOLDER_VBA'], filename)
         file.save(input_path)
 
-        # Convert using LibreOffice (works on Render)
-        success = convert_with_libreoffice(input_path, temp_output)
-
-        if not success:
+        # Convert using unoconv
+        if not convert_excel_to_pdf(input_path, temp_output):
             raise Exception("PDF conversion failed")
 
         # Create ZIP file
@@ -689,6 +686,7 @@ def process_vba_excel():
         app.logger.error(f"Processing error: {str(e)}")
 
     return redirect(url_for('dashboard'))
+    
 @app.route('/download-vba-pdf/<filename>')
 def download_vba_pdf(filename):
     try:
