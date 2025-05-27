@@ -639,53 +639,175 @@ def process_vba_excel():
         flash('No selected file', 'error')
         return redirect(url_for('dashboard'))
 
-    if not allowed_file(file.filename, 'excel'):
+    if file and allowed_file(file.filename, 'excel'):
+        try:
+            # Clear previous outputs
+            temp_output = os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'temp')
+            if os.path.exists(temp_output):
+                shutil.rmtree(temp_output)
+            os.makedirs(temp_output, exist_ok=True)
+
+            # Save the uploaded file
+            filename = secure_filename(file.filename)
+            input_path = os.path.join(app.config['UPLOAD_FOLDER_VBA'], filename)
+            file.save(input_path)
+            
+            # Process the Excel file using openpyxl
+            from openpyxl import load_workbook
+            wb = load_workbook(input_path)
+            ws = wb.active  # Get the first worksheet
+
+            generated_pdfs = []
+            
+            # Method 1: Export each column as separate PDF (like first VBA macro)
+            if ws.max_column >= 3:  # At least column C exists
+                for col in range(3, min(23, ws.max_column + 1)):  # Columns C to V (3 to 22)
+                    # Get column header for filename
+                    cell_value = str(ws.cell(row=1, column=col).value).strip()
+                    if not cell_value:
+                        cell_value = f"Col_{col}"
+                    
+                    # Create PDF
+                    pdf_name = f"{cell_value}.pdf"
+                    pdf_path = os.path.join(temp_output, pdf_name)
+                    
+                    # Create PDF using reportlab with table
+                    from reportlab.lib import colors
+                    from reportlab.lib.pagesizes import letter
+                    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+                    
+                    doc = SimpleDocTemplate(pdf_path, pagesize=letter)
+                    data = []
+                    
+                    # Add header
+                    data.append([cell_value])
+                    
+                    # Add column data (first 20 rows)
+                    for row in range(2, min(22, ws.max_row + 1)):
+                        cell_value = str(ws.cell(row=row, column=col).value)
+                        if cell_value:
+                            data.append([cell_value])
+                    
+                    # Create table
+                    table = Table(data, colWidths=[500], rowHeights=20)
+                    table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, 0), 14),
+                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                    ]))
+                    
+                    doc.build([table])
+                    generated_pdfs.append(pdf_name)
+            
+            # Method 2: Export specific ranges (like second VBA macro for bid summary)
+            if ws.title == "Screen Shot":  # Check if this is the bid summary sheet
+                range_definitions = [
+                    ("A1:BM2", "Summary_Header"),
+                    ("A10:BM11", ws['B10'].value),
+                    ("A13:BM14", ws['B13'].value),
+                    ("A16:BM17", ws['B16'].value),
+                    ("A19:BM20", ws['B19'].value),
+                    ("A22:BM23", ws['B22'].value),
+                    ("A25:BM26", ws['B25'].value),
+                    ("A28:BM29", ws['B28'].value),
+                    ("A31:BM32", ws['B31'].value),
+                    ("A34:BM35", ws['B34'].value),
+                    ("A37:BM38", ws['B37'].value),
+                    ("A4:BM5", "Summary_Footer"),
+                    ("A40:BM41", ws['B40'].value),
+                    ("A43:BM44", ws['B43'].value),
+                    ("A46:BM47", ws['B46'].value),
+                    ("A49:BM50", ws['B49'].value),
+                    ("A52:BM53", ws['B52'].value),
+                    ("A55:BM56", ws['B55'].value),
+                    ("A7:BM8", "Summary_Details")
+                ]
+                
+                for rng, name in range_definitions:
+                    if not name:
+                        continue
+                        
+                    pdf_name = f"{name}.pdf"
+                    pdf_path = os.path.join(temp_output, pdf_name)
+                    
+                    # Parse the range
+                    start_col, start_row, end_col, end_row = parse_range(rng)
+                    
+                    # Extract data from the range
+                    data = []
+                    for row in range(start_row, end_row + 1):
+                        row_data = []
+                        for col in range(start_col, end_col + 1):
+                            cell = ws.cell(row=row, column=col)
+                            row_data.append(str(cell.value) if cell.value else "")
+                        data.append(row_data)
+                    
+                    # Create PDF with table
+                    doc = SimpleDocTemplate(pdf_path, pagesize=letter)
+                    table = Table(data)
+                    
+                    # Add style
+                    table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, 0), 12),
+                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                        ('WORDWRAP', (0, 0), (-1, -1)),
+                    ]))
+                    
+                    doc.build([table])
+                    generated_pdfs.append(pdf_name)
+            
+            if not generated_pdfs:
+                flash('No PDFs were generated', 'warning')
+            else:
+                session['vba_generated_pdfs'] = [os.path.basename(p) for p in generated_pdfs]
+                flash(f'Successfully generated {len(generated_pdfs)} PDF file(s)', 'success')
+            
+            # Clean up
+            wb.close()
+            os.remove(input_path)
+            
+        except Exception as e:
+            flash(f'Error processing file: {str(e)}', 'error')
+            app.logger.error(f"Error in process_vba_excel: {str(e)}")
+    else:
         flash('Invalid file type. Only Excel files allowed', 'error')
-        return redirect(url_for('dashboard'))
-
-    try:
-        # Setup directories
-        temp_output = os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'temp')
-        os.makedirs(temp_output, exist_ok=True)
-
-        # Save uploaded file
-        filename = secure_filename(file.filename)
-        input_path = os.path.join(app.config['UPLOAD_FOLDER_VBA'], filename)
-        file.save(input_path)
-
-        # Convert using unoconv
-        if not convert_excel_to_pdf(input_path, temp_output):
-            raise Exception("PDF conversion failed")
-
-        # Create ZIP file
-        zip_filename = 'generated_pdfs.zip'
-        zip_path = os.path.join(app.config['VBA_OUTPUT_FOLDER'], zip_filename)
-        
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
-        
-        shutil.make_archive(
-            os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'generated_pdfs'), 
-            'zip', 
-            temp_output
-        )
-
-        # Store result in session
-        pdf_files = [f for f in os.listdir(temp_output) if f.endswith('.pdf')]
-        session['vba_zip_file'] = zip_filename
-        session['vba_generated_count'] = len(pdf_files)
-
-        # Cleanup
-        shutil.rmtree(temp_output)
-        os.remove(input_path)
-
-        flash(f'Successfully generated {len(pdf_files)} PDF file(s). Ready to download.', 'success')
-        
-    except Exception as e:
-        flash(f'Error processing file: {str(e)}', 'error')
-        app.logger.error(f"Processing error: {str(e)}")
 
     return redirect(url_for('dashboard'))
+
+def parse_range(rng_str):
+    """Parse Excel range string into column/row numbers"""
+    import re
+    # Split range like "A1:BM2" into ["A1", "BM2"]
+    cells = rng_str.split(':')
+    if len(cells) != 2:
+        raise ValueError(f"Invalid range format: {rng_str}")
+    
+    # Parse first cell
+    col1 = re.sub(r'\d', '', cells[0]).upper()
+    row1 = int(re.sub(r'[A-Z]', '', cells[0]))
+    
+    # Parse second cell
+    col2 = re.sub(r'\d', '', cells[1]).upper()
+    row2 = int(re.sub(r'[A-Z]', '', cells[1]))
+    
+    # Convert column letters to numbers (A=1, B=2, ..., Z=26, AA=27, etc.)
+    def col_to_num(col):
+        num = 0
+        for c in col:
+            num = num * 26 + (ord(c) - ord('A') + 1)
+        return num
+    
+    return (col_to_num(col1), row1, col_to_num(col2), row2)
     
 @app.route('/download-vba-pdf/<filename>')
 def download_vba_pdf(filename):
