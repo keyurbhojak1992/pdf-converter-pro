@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session
+from flask import Flask, render_template, request, redirect, url_for, send_file, flash, session, send_from_directory
 import os
 from pdf2image import convert_from_path
 from PIL import Image, ImageChops
@@ -7,21 +7,19 @@ from werkzeug.utils import secure_filename
 import pandas as pd
 import xlsxwriter
 from datetime import datetime
-import math
 import numpy as np
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
-from flask import send_from_directory
 import atexit
 from threading import Thread
 from time import sleep
 import requests
 import subprocess
 import tempfile
-import pythoncom
-import win32com.client as win32  # Only for Option 1
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', template_folder='templates')
@@ -600,34 +598,7 @@ def download_sales_report():
 
     return send_file(session['latest_sales_report'], as_attachment=True)
 
-# Ensure folders exist from here
-os.makedirs(app.config['UPLOAD_FOLDER_VBA'], exist_ok=True)
-os.makedirs(app.config['VBA_OUTPUT_FOLDER'], exist_ok=True)
-
-def convert_excel_to_pdf(input_path, output_folder):
-    """Convert Excel to PDF using unoconv"""
-    try:
-        cmd = [
-            'unoconv',
-            '-f', 'pdf',
-            '-o', output_folder,
-            input_path
-        ]
-        result = subprocess.run(
-            cmd,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=300  # 5 minute timeout
-        )
-        return True
-    except subprocess.CalledProcessError as e:
-        app.logger.error(f"unoconv error: {e.stderr.decode()}")
-        return False
-    except Exception as e:
-        app.logger.error(f"Conversion error: {str(e)}")
-        return False
-
+# Replace the VBA Excel processing with this cross-platform version
 @app.route('/process-vba-excel', methods=['POST'])
 def process_vba_excel():
     if 'file' not in request.files:
@@ -672,10 +643,6 @@ def process_vba_excel():
                     pdf_path = os.path.join(temp_output, pdf_name)
                     
                     # Create PDF using reportlab with table
-                    from reportlab.lib import colors
-                    from reportlab.lib.pagesizes import letter
-                    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-                    
                     doc = SimpleDocTemplate(pdf_path, pagesize=letter)
                     data = []
                     
@@ -808,7 +775,7 @@ def parse_range(rng_str):
         return num
     
     return (col_to_num(col1), row1, col_to_num(col2), row2)
-    
+
 @app.route('/download-vba-pdf/<filename>')
 def download_vba_pdf(filename):
     try:
@@ -823,20 +790,23 @@ def download_vba_pdf(filename):
 
 @app.route('/download-all-vba-pdfs')
 def download_all_vba_pdfs():
-    if 'vba_zip_file' not in session:
+    temp_output = os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'temp')
+    if not os.path.exists(temp_output):
         flash('No PDFs available for download', 'error')
         return redirect(url_for('dashboard'))
     
-    zip_path = os.path.join(app.config['VBA_OUTPUT_FOLDER'], session['vba_zip_file'])
-    
-    if not os.path.exists(zip_path):
-        flash('PDF files no longer available', 'error')
-        return redirect(url_for('dashboard'))
+    zip_filename = 'vba_generated_pdfs.zip'
+    zip_path = os.path.join(app.config['VBA_OUTPUT_FOLDER'], zip_filename)
     
     try:
+        shutil.make_archive(
+            os.path.join(app.config['VBA_OUTPUT_FOLDER'], 'vba_generated_pdfs'), 
+            'zip', 
+            temp_output
+        )
         return send_file(zip_path, as_attachment=True)
     except Exception as e:
-        flash(f'Error downloading ZIP file: {e}', 'error')
+        flash(f'Error creating ZIP file: {e}', 'error')
         return redirect(url_for('dashboard'))
 
 def ping_self():
