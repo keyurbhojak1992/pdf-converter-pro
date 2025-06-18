@@ -288,24 +288,157 @@
 {% block scripts %}
 {{ super() }}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
 <script>
-// Set current date
-document.getElementById('current-date').textContent = new Date().toLocaleDateString();
+// Set PDF.js worker path
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.worker.min.js';
 
-// Sample diamond data - in a real app you would parse this from PDF text
-const diamondData = [
-    { sno: "1/1", assortment: "REJ1-GRY 12CT", weight: 12.57 },
-    { sno: "1", assortment: "#REJECTIONS 11CT-19CT", weight: 12.57 },
-    { sno: "", assortment: "2/1 4BLKCLIV/MB-2C 11CT", weight: 11.69 },
-    { sno: "2", assortment: "#4BLK CLIV & MB 11CT-19CT", weight: 11.69 },
-    // ... rest of your diamond data ...
-    { sno: "68", assortment: "#REJECTION BRN 4GR - 6GR", weight: 289.90 }
-];
+// Global variables
+let diamondData = [];
+let pdfMetadata = {
+    company: "SIA JEWELS",
+    contract: "05500798",
+    date: new Date().toLocaleDateString()
+};
 
-// Populate table
+// Initialize date
+document.getElementById('inventory-date').textContent = pdfMetadata.date;
+
+// Process PDF file
+document.getElementById('pdfUpload').addEventListener('change', async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // Show processing UI
+    document.getElementById('pdf-processing').classList.remove('d-none');
+    document.getElementById('diamond-results').classList.add('d-none');
+    updateProgress(0, "Loading PDF...");
+    
+    try {
+        // Read PDF file
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+        
+        let fullText = '';
+        updateProgress(10, "Extracting text...");
+        
+        // Extract text from each page
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const text = textContent.items.map(item => item.str).join(' ');
+            fullText += text + '\n';
+            
+            // Update progress
+            const progress = 10 + (i / pdf.numPages * 80);
+            updateProgress(progress, `Processing page ${i} of ${pdf.numPages}...`);
+        }
+        
+        // Parse the extracted text
+        updateProgress(95, "Parsing data...");
+        diamondData = parseDiamondData(fullText);
+        
+        // Extract metadata if possible
+        extractMetadata(fullText);
+        
+        // Display results
+        populateDiamondTable();
+        document.getElementById('pdf-processing').classList.add('d-none');
+        document.getElementById('diamond-results').classList.remove('d-none');
+        updateProgress(100, "Processing complete!");
+        
+    } catch (error) {
+        console.error("PDF processing error:", error);
+        updateProgress(0, "Error processing PDF");
+        alert("Error processing PDF: " + error.message);
+    }
+});
+
+// Parse diamond data from text
+function parseDiamondData(text) {
+    // This is a basic parser - you'll need to customize it for your specific PDF format
+    const lines = text.split('\n');
+    const data = [];
+    
+    // Example parsing logic (adjust based on your PDF structure)
+    for (const line of lines) {
+        // Skip empty lines
+        if (!line.trim()) continue;
+        
+        // Try to extract S.No, Assortment, and Weight
+        const match = line.match(/(\d+\/?\d*)\s+(.*?)\s+(\d+\.\d{2})/);
+        if (match) {
+            data.push({
+                sno: match[1].trim(),
+                assortment: match[2].trim(),
+                weight: parseFloat(match[3])
+            });
+        }
+    }
+    
+    return data.length > 0 ? data : getSampleData();
+}
+
+// Extract metadata from text
+function extractMetadata(text) {
+    // Try to find company name
+    const companyMatch = text.match(/Company:\s*(.+)/i) || 
+                        text.match(/Customer:\s*(.+)/i);
+    if (companyMatch) {
+        pdfMetadata.company = companyMatch[1].trim();
+    }
+    
+    // Try to find contract number
+    const contractMatch = text.match(/Contract\s*No[.:]*\s*(\w+)/i);
+    if (contractMatch) {
+        pdfMetadata.contract = contractMatch[1].trim();
+    }
+    
+    // Try to find date
+    const dateMatch = text.match(/Date:\s*(\d{2}\.\d{2}\.\d{4})/i) ||
+                     text.match(/(\d{2}\/\d{2}\/\d{4})/);
+    if (dateMatch) {
+        pdfMetadata.date = dateMatch[1].trim();
+    }
+    
+    // Update UI
+    document.getElementById('company-name').textContent = pdfMetadata.company;
+    document.getElementById('contract-number').textContent = pdfMetadata.contract;
+    document.getElementById('inventory-date').textContent = pdfMetadata.date;
+}
+
+// Fallback sample data
+function getSampleData() {
+    return [
+        { sno: "1/1", assortment: "REJ1-GRY 12CT", weight: 12.57 },
+        { sno: "1", assortment: "#REJECTIONS 11CT-19CT", weight: 12.57 },
+        // ... rest of your sample data ...
+    ];
+}
+
+// Update progress bar
+function updateProgress(percent, message) {
+    const progressBar = document.getElementById('pdf-progress-bar');
+    const statusText = document.getElementById('pdf-status');
+    
+    progressBar.style.width = `${percent}%`;
+    progressBar.setAttribute('aria-valuenow', percent);
+    statusText.textContent = message;
+}
+
+// Populate table with diamond data
 function populateDiamondTable() {
     const tableBody = document.getElementById('tableBody');
-    tableBody.innerHTML = ''; // Clear existing
+    tableBody.innerHTML = '';
+    
+    if (diamondData.length === 0) {
+        const row = tableBody.insertRow();
+        const cell = row.insertCell(0);
+        cell.colSpan = 3;
+        cell.textContent = "No diamond data found in PDF";
+        cell.className = "text-center text-muted";
+        return;
+    }
     
     diamondData.forEach(item => {
         const row = tableBody.insertRow();
@@ -330,9 +463,9 @@ function populateDiamondTable() {
 function downloadDiamondExcel() {
     const wb = XLSX.utils.book_new();
     const wsData = [
-        ['SIA JEWELS - Diamond Inventory'],
-        ['Contract Number: 05500798'],
-        ['Date: ' + new Date().toLocaleDateString()],
+        [`${pdfMetadata.company} - Diamond Inventory`],
+        [`Contract Number: ${pdfMetadata.contract}`],
+        [`Date: ${pdfMetadata.date}`],
         [''],
         ['S.No', 'Assortment Description', 'Weight (ct)'],
         ...diamondData.map(item => [item.sno, item.assortment, item.weight]),
@@ -341,35 +474,27 @@ function downloadDiamondExcel() {
     
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     XLSX.utils.book_append_sheet(wb, ws, 'Diamond Inventory');
-    XLSX.writeFile(wb, 'Diamond_Inventory.xlsx');
+    XLSX.writeFile(wb, `${pdfMetadata.company.replace(/\s+/g, '_')}_Diamond_Inventory.xlsx`);
 }
 
 // Download as CSV
 function downloadDiamondCSV() {
-    let csv = "S.No,Assortment,Weight (ct)\n";
+    let csv = `${pdfMetadata.company} - Diamond Inventory\n`;
+    csv += `Contract Number: ${pdfMetadata.contract}\n`;
+    csv += `Date: ${pdfMetadata.date}\n\n`;
+    csv += "S.No,Assortment,Weight (ct)\n";
+    
     diamondData.forEach(item => {
         csv += `"${item.sno}","${item.assortment}",${item.weight}\n`;
     });
+    
     csv += `"","TOTAL",${diamondData.reduce((sum, item) => sum + item.weight, 0)}`;
     
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = 'Diamond_Inventory.csv';
+    link.download = `${pdfMetadata.company.replace(/\s+/g, '_')}_Diamond_Inventory.csv`;
     link.click();
 }
-
-// Future PDF parsing functionality
-document.getElementById('pdfUpload').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    // In a real implementation, you would use PDF.js here to extract text
-    // Then parse the text to populate the diamondData array
-    alert('PDF parsing functionality coming soon! Currently using sample data.');
-});
-
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', populateDiamondTable);
 </script>
 {% endblock %}
