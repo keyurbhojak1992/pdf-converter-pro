@@ -87,33 +87,35 @@ footer {
     color: white;
 }
 
-/* Rough PDF to Excel Converter Styles */
-.card-header.bg-dark {
-    background: linear-gradient(135deg, #343a40 0%, #212529 100%) !important;
+/* PDF Processing Styles */
+#pdf-processing {
+    transition: all 0.3s ease;
 }
 
-#diamond-converter .company-info {
-    background-color: #f8f9fa;
-    border-left: 4px solid #0d6efd;
+.progress {
+    height: 1.5rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.progress-bar {
+    transition: width 0.3s ease;
+}
+
+#pdf-status {
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+/* Diamond Table Styles */
+#diamondTable th {
+    position: sticky;
+    top: 0;
+    background-color: #0d6efd;
 }
 
 #diamondTable {
-    font-size: 0.9rem;
-}
-
-#diamondTable th {
-    white-space: nowrap;
-}
-
-#diamondTable td {
-    vertical-align: middle;
-}
-
-.text-end {
-    text-align: right !important;
-}
-
-.table-success {
-    --bs-table-bg: #198754;
-    --bs-table-color: white;
+    max-height: 400px;
+    display: block;
+    overflow-y: auto;
 }
