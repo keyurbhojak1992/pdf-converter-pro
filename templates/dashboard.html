@@ -216,8 +216,8 @@
         </div>
         <div class="card-body">
             <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
                 <strong>Instructions:</strong> Upload your rough diamond inventory PDF to convert to Excel.
-                Works entirely in your browser - no data is uploaded to any server.
             </div>
             
             <div class="mb-3">
@@ -226,41 +226,32 @@
                 <div class="form-text">Supported formats: Standard diamond inventory PDFs</div>
             </div>
             
-            <div id="pdf-processing" class="d-none">
-                <div class="progress mb-3">
-                    <div id="pdf-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                         role="progressbar" style="width: 0%"></div>
+            <div id="pdf-processing" class="text-center my-4 d-none">
+                <div class="spinner-border text-primary mb-2" role="status">
+                    <span class="visually-hidden">Loading...</span>
                 </div>
-                <p id="pdf-status" class="text-center">Processing PDF...</p>
+                <p id="pdf-status" class="text-muted">Processing PDF file...</p>
             </div>
             
+            <div id="pdf-error" class="alert alert-danger d-none"></div>
+            
             <div id="diamond-results" class="d-none">
-                <div class="company-info mb-3 p-3 bg-light rounded">
-                    <h3 id="company-name">SIA JEWELS</h3>
-                    <p><strong>Contract Number:</strong> <span id="contract-number">05500798</span></p>
-                    <p><strong>Date:</strong> <span id="inventory-date"></span></p>
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <span id="success-message">Successfully processed PDF file!</span>
                 </div>
-
+                
                 <div class="table-responsive">
                     <table class="table table-bordered table-hover table-sm" id="diamondTable">
-                        <thead class="table-primary">
-                            <tr>
-                                <th>S.No</th>
-                                <th>Assortment Description</th>
-                                <th>Weight (ct)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tableBody">
-                            <!-- Data will be populated by JavaScript -->
-                        </tbody>
+                        <!-- Table content will be populated by JavaScript -->
                     </table>
                 </div>
 
                 <div class="d-flex justify-content-between mt-3">
-                    <button class="btn btn-success" onclick="downloadDiamondExcel()">
+                    <button class="btn btn-success" id="download-excel">
                         <i class="fas fa-file-excel me-1"></i> Download Excel
                     </button>
-                    <button class="btn btn-primary" onclick="downloadDiamondCSV()">
+                    <button class="btn btn-primary" id="download-csv">
                         <i class="fas fa-file-csv me-1"></i> Download CSV
                     </button>
                 </div>
