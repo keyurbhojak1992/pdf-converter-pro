@@ -86,3 +86,34 @@ footer {
     border-color: #fb8c00;
     color: white;
 }
+
+/* Rough PDF to Excel Converter Styles */
+.card-header.bg-dark {
+    background: linear-gradient(135deg, #343a40 0%, #212529 100%) !important;
+}
+
+#diamond-converter .company-info {
+    background-color: #f8f9fa;
+    border-left: 4px solid #0d6efd;
+}
+
+#diamondTable {
+    font-size: 0.9rem;
+}
+
+#diamondTable th {
+    white-space: nowrap;
+}
+
+#diamondTable td {
+    vertical-align: middle;
+}
+
+.text-end {
+    text-align: right !important;
+}
+
+.table-success {
+    --bs-table-bg: #198754;
+    --bs-table-color: white;
+}
