@@ -170,40 +170,92 @@
     </div>
 
     <!-- VBA PDF Export Section -->
-<div class="col-lg-6 mt-4">
-    <div class="card shadow-sm">
-        <div class="card-header bg-info text-white">
-            <h4 class="mb-0"><i class="fas fa-file-excel me-2"></i>Excel to PDF Export</h4>
-        </div>
-        <div class="card-body">
-            <form method="POST" action="{{ url_for('process_vba_excel') }}" enctype="multipart/form-data" class="mb-4">
-                <div class="mb-3">
-                    <label class="form-label">1. Select Excel File</label>
-                    <input class="form-control" type="file" name="file" accept=".xlsx,.xlsm" required>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">2. Select Report Type</label>
-                    <select name="vba_type" class="form-select" required>
-                        <option value="sales">Sales Summary Report</option>
-                        <option value="bid">Bid Summary Report</option>
-                    </select>
-                </div>
-                
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="fas fa-file-pdf me-1"></i> Convert to PDF
-                </button>
-            </form>
-
-            {% if 'vba_zip_file' in session %}
-            <div class="alert alert-success">
-                <i class="fas fa-check-circle me-2"></i> 
-                Conversion complete! {{ session['vba_generated_count'] }} PDFs generated.
+    <div class="col-lg-6 mt-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-info text-white">
+                <h4 class="mb-0"><i class="fas fa-file-excel me-2"></i>Excel to PDF Export</h4>
             </div>
-            <a href="{{ url_for('download_all_vba_pdfs') }}" class="btn btn-success w-100">
-                <i class="fas fa-file-archive me-1"></i> Download All PDFs (ZIP)
-            </a>
-            {% endif %}
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('process_vba_excel') }}" enctype="multipart/form-data" class="mb-4">
+                    <div class="mb-3">
+                        <label class="form-label">1. Select Excel File</label>
+                        <input class="form-control" type="file" name="file" accept=".xlsx,.xlsm" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">2. Select Report Type</label>
+                        <select name="vba_type" class="form-select" required>
+                            <option value="sales">Sales Summary Report</option>
+                            <option value="bid">Bid Summary Report</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-file-pdf me-1"></i> Convert to PDF
+                    </button>
+                </form>
+
+                {% if 'vba_zip_file' in session %}
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i> 
+                    Conversion complete! {{ session['vba_generated_count'] }} PDFs generated.
+                </div>
+                <a href="{{ url_for('download_all_vba_pdfs') }}" class="btn btn-success w-100">
+                    <i class="fas fa-file-archive me-1"></i> Download All PDFs (ZIP)
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Rough PDF to Excel Converter Section -->
+    <div class="col-lg-6 mt-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <h4 class="mb-0"><i class="fas fa-gem me-2"></i>Rough PDF to Excel Converter</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <strong>Instructions:</strong> This tool converts diamond inventory PDFs to Excel format.
+                    No file upload needed - works entirely in your browser.
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Upload PDF File (optional)</label>
+                    <input class="form-control" type="file" id="pdfUpload" accept=".pdf">
+                    <div class="form-text">For future PDF parsing functionality</div>
+                </div>
+                
+                <div class="company-info mb-3 p-3 bg-light rounded">
+                    <h3>SIA JEWELS</h3>
+                    <p><strong>Contract Number:</strong> 05500798</p>
+                    <p><strong>Date:</strong> <span id="current-date"></span></p>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover table-sm" id="diamondTable">
+                        <thead class="table-primary">
+                            <tr>
+                                <th>S.No</th>
+                                <th>Assortment Description</th>
+                                <th>Weight (ct)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- Data will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between mt-3">
+                    <button class="btn btn-success" onclick="downloadDiamondExcel()">
+                        <i class="fas fa-file-excel me-1"></i> Download Excel
+                    </button>
+                    <button class="btn btn-primary" onclick="downloadDiamondCSV()">
+                        <i class="fas fa-file-csv me-1"></i> Download CSV
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -222,4 +274,93 @@
     {% endif %}
 {% endwith %}
 
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// Set current date
+document.getElementById('current-date').textContent = new Date().toLocaleDateString();
+
+// Sample diamond data - in a real app you would parse this from PDF text
+const diamondData = [
+    { sno: "1/1", assortment: "REJ1-GRY 12CT", weight: 12.57 },
+    { sno: "1", assortment: "#REJECTIONS 11CT-19CT", weight: 12.57 },
+    { sno: "", assortment: "2/1 4BLKCLIV/MB-2C 11CT", weight: 11.69 },
+    { sno: "2", assortment: "#4BLK CLIV & MB 11CT-19CT", weight: 11.69 },
+    // ... rest of your diamond data ...
+    { sno: "68", assortment: "#REJECTION BRN 4GR - 6GR", weight: 289.90 }
+];
+
+// Populate table
+function populateDiamondTable() {
+    const tableBody = document.getElementById('tableBody');
+    tableBody.innerHTML = ''; // Clear existing
+    
+    diamondData.forEach(item => {
+        const row = tableBody.insertRow();
+        row.insertCell(0).textContent = item.sno;
+        row.insertCell(1).textContent = item.assortment;
+        const weightCell = row.insertCell(2);
+        weightCell.textContent = item.weight.toFixed(2);
+        weightCell.classList.add('text-end');
+    });
+    
+    // Add total row
+    const totalRow = tableBody.insertRow();
+    totalRow.classList.add('table-success', 'fw-bold');
+    totalRow.insertCell(0).textContent = '';
+    totalRow.insertCell(1).textContent = 'TOTAL';
+    const totalWeightCell = totalRow.insertCell(2);
+    totalWeightCell.textContent = diamondData.reduce((sum, item) => sum + item.weight, 0).toFixed(2);
+    totalWeightCell.classList.add('text-end');
+}
+
+// Download as Excel
+function downloadDiamondExcel() {
+    const wb = XLSX.utils.book_new();
+    const wsData = [
+        ['SIA JEWELS - Diamond Inventory'],
+        ['Contract Number: 05500798'],
+        ['Date: ' + new Date().toLocaleDateString()],
+        [''],
+        ['S.No', 'Assortment Description', 'Weight (ct)'],
+        ...diamondData.map(item => [item.sno, item.assortment, item.weight]),
+        ['', 'TOTAL', diamondData.reduce((sum, item) => sum + item.weight, 0)]
+    ];
+    
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Diamond Inventory');
+    XLSX.writeFile(wb, 'Diamond_Inventory.xlsx');
+}
+
+// Download as CSV
+function downloadDiamondCSV() {
+    let csv = "S.No,Assortment,Weight (ct)\n";
+    diamondData.forEach(item => {
+        csv += `"${item.sno}","${item.assortment}",${item.weight}\n`;
+    });
+    csv += `"","TOTAL",${diamondData.reduce((sum, item) => sum + item.weight, 0)}`;
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'Diamond_Inventory.csv';
+    link.click();
+}
+
+// Future PDF parsing functionality
+document.getElementById('pdfUpload').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // In a real implementation, you would use PDF.js here to extract text
+    // Then parse the text to populate the diamondData array
+    alert('PDF parsing functionality coming soon! Currently using sample data.');
+});
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', populateDiamondTable);
+</script>
 {% endblock %}
