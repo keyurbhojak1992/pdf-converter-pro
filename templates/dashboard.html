@@ -209,27 +209,36 @@
     </div>
 
     <!-- Rough PDF to Excel Converter Section -->
-    <div class="col-lg-6 mt-4">
-        <div class="card shadow-sm">
-            <div class="card-header bg-dark text-white">
-                <h4 class="mb-0"><i class="fas fa-gem me-2"></i>Rough PDF to Excel Converter</h4>
+<div class="col-lg-6 mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white">
+            <h4 class="mb-0"><i class="fas fa-gem me-2"></i>Rough PDF to Excel Converter</h4>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <strong>Instructions:</strong> Upload your rough diamond inventory PDF to convert to Excel.
+                Works entirely in your browser - no data is uploaded to any server.
             </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <strong>Instructions:</strong> This tool converts diamond inventory PDFs to Excel format.
-                    No file upload needed - works entirely in your browser.
+            
+            <div class="mb-3">
+                <label class="form-label">Upload PDF File</label>
+                <input class="form-control" type="file" id="pdfUpload" accept=".pdf" required>
+                <div class="form-text">Supported formats: Standard diamond inventory PDFs</div>
+            </div>
+            
+            <div id="pdf-processing" class="d-none">
+                <div class="progress mb-3">
+                    <div id="pdf-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%"></div>
                 </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">Upload PDF File (optional)</label>
-                    <input class="form-control" type="file" id="pdfUpload" accept=".pdf">
-                    <div class="form-text">For future PDF parsing functionality</div>
-                </div>
-                
+                <p id="pdf-status" class="text-center">Processing PDF...</p>
+            </div>
+            
+            <div id="diamond-results" class="d-none">
                 <div class="company-info mb-3 p-3 bg-light rounded">
-                    <h3>SIA JEWELS</h3>
-                    <p><strong>Contract Number:</strong> 05500798</p>
-                    <p><strong>Date:</strong> <span id="current-date"></span></p>
+                    <h3 id="company-name">SIA JEWELS</h3>
+                    <p><strong>Contract Number:</strong> <span id="contract-number">05500798</span></p>
+                    <p><strong>Date:</strong> <span id="inventory-date"></span></p>
                 </div>
 
                 <div class="table-responsive">
